@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rijeka Dashboard</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #f0f0f0;
+      font-family: 'Menlo', monospace;
+      text-align: left;
+      margin: 0;
+      padding: 0 10px;
+    }
+    #greeting { font-size: 36px; margin-bottom: 40px; }
+    #time { font-size: 36px; font-weight: bold; }
+    #date { font-size: 36px; font-weight: bold; }
+    #location { font-size: 20px; margin-top: 30px; font-weight: 600; }
+    #weather { font-size: 24px; margin: 15px 0; }
+    #sun { font-size: 18px; margin-bottom: 10px; }
+    #moonPhase {
+      margin-top: 30px;
+      font-size: 18px;
+    }
+    #moonEmoji {
+      font-size: 64px;
+    }
+    #phaseLabel, #illumination {
+      margin: 5px 0;
+    }
+    /* New moonrise/set block styling */
+    #moonTimes {
+      margin-top: 15px;
+      font-size: 16px;
+      line-height: 1.4;
+      max-width: 350px;
+      word-wrap: break-word;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.min.js"></script>
+</head>
+<body>
+  <div id="greeting">Hello!</div>
+
+  <div id="time"></div>
+  <div id="date"></div>
+
+  <div id="location">Locating...</div>
+  <div id="weather">Loading weather...</div>
+  <div id="sun"></div>
+
+  <div id="moonPhase">
+    <div id="moonEmoji">🌕</div>
+    <div id="phaseLabel">Loading phase...</div>
+    <div id="illumination">Loading illumination...</div>
+
+    <div id="moonTimes">
+      <div id="moonrise"></div>
+      <div id="moonriseDirection"></div>
+      <div id="moonset"></div>
+      <div id="moonsetDirection"></div>
+    </div>
+  </div>
+
+  <script>
+    const name = 'Eugene';
+
+    function updateDateTime() {
+      const now = new Date();
+      document.getElementById('time').textContent = now.toLocaleTimeString();
+      document.getElementById('date').textContent = now.toLocaleDateString('en-GB');
+
+      const h = now.getHours();
+      let greet = 'Hello';
+      if (h < 5 || h >= 22) greet = 'Good night';
+      else if (h < 12) greet = 'Good morning';
+      else if (h < 18) greet = 'Good afternoon';
+      else greet = 'Good evening';
+      document.getElementById('greeting').textContent = `${greet}, ${name}`;
+    }
+
+    function getMoonPhaseData() {
+      const now = new Date();
+      const monthLen = 29.530588853;
+      const refNew = new Date(Date.UTC(2000,0,6,18,14));
+      const phase = ((now - refNew) / 86400000) % monthLen / monthLen;
+      const illum = 0.5 * (1 - Math.cos(2 * Math.PI * phase));
+
+      let namePhase, emoji;
+      if (phase < 0.03 || phase > 0.97) { namePhase='New Moon'; emoji='🌑'; }
+      else if (phase < 0.22) { namePhase='Waxing Crescent'; emoji='🌒'; }
+      else if (phase < 0.28){ namePhase='First Quarter'; emoji='🌓'; }
+      else if (phase < 0.47){ namePhase='Waxing Gibbous'; emoji='🌔'; }
+      else if (phase < 0.53){ namePhase='Full Moon'; emoji='🌕'; }
+      else if (phase < 0.72){ namePhase='Waning Gibbous'; emoji='🌖'; }
+      else if (phase < 0.78){ namePhase='Last Quarter'; emoji='🌗'; }
+      else { namePhase='Waning Crescent'; emoji='🌘'; }
+
+      return { namePhase, emoji, illum };
+    }
+
+    function updateMoonPhase() {
+      const { namePhase, emoji, illum } = getMoonPhaseData();
+      document.getElementById('moonEmoji').textContent = emoji;
+      document.getElementById('phaseLabel').textContent = namePhase;
+      document.getElementById('illumination').textContent =
+        `Illumination: ${(illum*100).toFixed(1)}%`;
+    }
+
+    // Utility functions for moon times
+    function toDegrees(radians) {
+      return radians * 180 / Math.PI;
+    }
+    function degreesToCompass(degrees) {
+      const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                          'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      const index = Math.round(degrees / 22.5) % 16;
+      return directions[index];
+    }
+    function formatDateTime(dateObj) {
+      if (!dateObj) return "No moonrise/moonset on this day";
+      const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+      const datePart = dateObj.toLocaleDateString('en-US', options);
+      const timePart = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return `${datePart} ${timePart}`;
+    }
+
+    async function fetchLocationAndWeather() {
+      try {
+        // Get location from IP
+        const locRes = await fetch('http://ip-api.com/json');
+        const locData = await locRes.json();
+
+        if(locData.status !== "success") {
+          document.getElementById('location').textContent = "Could not get location.";
+          document.getElementById('weather').textContent = "";
+          document.getElementById('sun').textContent = "";
+          clearMoonTimes();
+          return;
+        }
+
+        const lat = locData.lat;
+        const lon = locData.lon;
+
+        // Show location name (city, country)
+        const city = locData.city || "";
+        const country = locData.country || "";
+        document.getElementById('location').textContent = city && country ? `${city}, ${country}` : "Location unknown";
+
+        // Fetch current weather + hourly precipitation_probability + daily sunrise/sunset
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=precipitation_probability&daily=sunrise,sunset&timezone=auto`;
+        const weatherRes = await fetch(weatherUrl);
+        const weatherData = await weatherRes.json();
+
+        if(!weatherData.current_weather) {
+          document.getElementById('weather').textContent = "Weather data not available.";
+          clearMoonTimes();
+          return;
+        }
+
+        const temp = weatherData.current_weather.temperature.toFixed(1);
+
+        // Find current hour precipitation probability
+        let rainChance = "N/A";
+        if (weatherData.hourly && weatherData.hourly.precipitation_probability && weatherData.hourly.time) {
+          const now = new Date();
+          const nowIso = now.toISOString().slice(0,13); // e.g. "2025-07-14T15"
+          const hourIndex = weatherData.hourly.time.findIndex(t => t.startsWith(nowIso));
+          if (hourIndex !== -1) {
+            rainChance = weatherData.hourly.precipitation_probability[hourIndex] + "%";
+          }
+        }
+
+        document.getElementById('weather').textContent = `🌡️current: ${temp} °C | ☂️chance: ${rainChance}`;
+
+        if(weatherData.daily && weatherData.daily.sunrise && weatherData.daily.sunset) {
+          const sunrise = new Date(weatherData.daily.sunrise[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          const sunset = new Date(weatherData.daily.sunset[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          document.getElementById('sun').textContent = `Sunrise: ${sunrise} | Sunset: ${sunset}`;
+        } else {
+          document.getElementById('sun').textContent = "";
+        }
+
+        // Calculate moonrise/moonset for today with correct logic
+        calculateAndDisplayMoonTimes(lat, lon);
+
+      } catch(e) {
+        document.getElementById('location').textContent = "Failed to get location.";
+        document.getElementById('weather').textContent = "Failed to fetch weather data.";
+        document.getElementById('sun').textContent = "";
+        clearMoonTimes();
+        console.error(e);
+      }
+    }
+
+    function clearMoonTimes() {
+      document.getElementById('moonrise').textContent = "";
+      document.getElementById('moonriseDirection').textContent = "";
+      document.getElementById('moonset').textContent = "";
+      document.getElementById('moonsetDirection').textContent = "";
+    }
+
+    // Main moonrise/moonset calculation & display function
+    function calculateAndDisplayMoonTimes(lat, lon) {
+      // Use today's date (local)
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const day = today.getDate();
+
+      // Get moon times for today
+      const moonTimesToday = SunCalc.getMoonTimes(new Date(year, month, day), lat, lon);
+      let moonriseTime = moonTimesToday.rise;
+      let moonsetTime = moonTimesToday.set;
+
+      // If moonset missing or before moonrise, get next day's moonset
+      if (!moonsetTime || (moonriseTime && moonsetTime < moonriseTime)) {
+        const nextDay = new Date(year, month, day + 1);
+        const moonTimesNextDay = SunCalc.getMoonTimes(nextDay, lat, lon);
+        moonsetTime = moonTimesNextDay.set;
+      }
+
+      // Calculate directions for moonrise
+      let moonriseAzimuthDeg = null;
+      let moonriseCompass = '';
+      if (moonriseTime) {
+        const pos = SunCalc.getMoonPosition(moonriseTime, lat, lon);
+        moonriseAzimuthDeg = (toDegrees(pos.azimuth) + 180) % 360;
+        moonriseCompass = degreesToCompass(moonriseAzimuthDeg);
+      }
+
+      // Calculate directions for moonset
+      let moonsetAzimuthDeg = null;
+      let moonsetCompass = '';
+      if (moonsetTime) {
+        const pos = SunCalc.getMoonPosition(moonsetTime, lat, lon);
+        moonsetAzimuthDeg = (toDegrees(pos.azimuth) + 180) % 360;
+        moonsetCompass = degreesToCompass(moonsetAzimuthDeg);
+      }
+
+      // Show results with full date + time + direction
+      document.getElementById('moonrise').textContent = `Moonrise: ${formatDateTime(moonriseTime)}`;
+      document.getElementById('moonriseDirection').textContent = moonriseAzimuthDeg !== null
+        ? `Moonrise direction: ${moonriseAzimuthDeg.toFixed(0)}° ${moonriseCompass}` : '';
+
+      document.getElementById('moonset').textContent = `Moonset: ${formatDateTime(moonsetTime)}`;
+      document.getElementById('moonsetDirection').textContent = moonsetAzimuthDeg !== null
+        ? `Moonset direction: ${moonsetAzimuthDeg.toFixed(0)}° ${moonsetCompass}` : '';
+    }
+
+    // Initial load
+    updateDateTime();
+    updateMoonPhase();
+    fetchLocationAndWeather();
+
+    setInterval(updateDateTime, 1000);
+
+    // Optional: update moon phase every hour for accuracy
+    setInterval(updateMoonPhase, 60*60*1000);
+  </script>
+</body>
+</html>
