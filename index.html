@@ -133,7 +133,7 @@
     async function fetchLocationAndWeather() {
       try {
         // Get location from IP
-        const locRes = await fetch('http://ip-api.com/json');
+        const locRes = await fetch('https://ip-api.com/json');
         const locData = await locRes.json();
 
         if(locData.status !== "success") {
