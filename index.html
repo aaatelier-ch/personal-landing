@@ -13,7 +13,7 @@
       height: 100vh;
       background: #f0f0f0;
       font-family: 'Menlo', monospace;
-      text-align: center;
+      text-align: left;
       margin: 0;
       padding: 0 10px;
     }
@@ -33,7 +33,6 @@
     #phaseLabel, #illumination {
       margin: 5px 0;
     }
-    /* New moonrise/set block styling */
     #moonTimes {
       margin-top: 15px;
       font-size: 16px;
@@ -68,186 +67,163 @@
   </div>
 
   <script>
-  const name = 'Eugene';
+    const name = 'Eugene';
 
-  function updateDateTime() {
-    const now = new Date();
-    document.getElementById('time').textContent = now.toLocaleTimeString();
-    document.getElementById('date').textContent = now.toLocaleDateString('en-GB');
+    function updateDateTime() {
+      const now = new Date();
+      document.getElementById('time').textContent = now.toLocaleTimeString();
+      document.getElementById('date').textContent = now.toLocaleDateString('en-GB');
 
-    const h = now.getHours();
-    let greet = 'Hello';
-    if (h < 5 || h >= 22) greet = 'Good night';
-    else if (h < 12) greet = 'Good morning';
-    else if (h < 18) greet = 'Good afternoon';
-    else greet = 'Good evening';
-    document.getElementById('greeting').textContent = `${greet}, ${name}`;
-  }
+      const h = now.getHours();
+      let greet = 'Hello';
+      if (h < 5 || h >= 22) greet = 'Good night';
+      else if (h < 12) greet = 'Good morning';
+      else if (h < 18) greet = 'Good afternoon';
+      else greet = 'Good evening';
+      document.getElementById('greeting').textContent = `${greet}, ${name}`;
+    }
 
-  function getMoonPhaseData() {
-    const now = new Date();
-    const monthLen = 29.530588853;
-    const refNew = new Date(Date.UTC(2000,0,6,18,14));
-    const phase = ((now - refNew) / 86400000) % monthLen / monthLen;
-    const illum = 0.5 * (1 - Math.cos(2 * Math.PI * phase));
+    function getMoonPhaseData() {
+      const now = new Date();
+      const monthLen = 29.530588853;
+      const refNew = new Date(Date.UTC(2000,0,6,18,14));
+      const phase = ((now - refNew) / 86400000) % monthLen / monthLen;
+      const illum = 0.5 * (1 - Math.cos(2 * Math.PI * phase));
 
-    let namePhase, emoji;
-    if (phase < 0.03 || phase > 0.97) { namePhase='New Moon'; emoji='🌑'; }
-    else if (phase < 0.22) { namePhase='Waxing Crescent'; emoji='🌒'; }
-    else if (phase < 0.28){ namePhase='First Quarter'; emoji='🌓'; }
-    else if (phase < 0.47){ namePhase='Waxing Gibbous'; emoji='🌔'; }
-    else if (phase < 0.53){ namePhase='Full Moon'; emoji='🌕'; }
-    else if (phase < 0.72){ namePhase='Waning Gibbous'; emoji='🌖'; }
-    else if (phase < 0.78){ namePhase='Last Quarter'; emoji='🌗'; }
-    else { namePhase='Waning Crescent'; emoji='🌘'; }
+      let namePhase, emoji;
+      if (phase < 0.03 || phase > 0.97) { namePhase='New Moon'; emoji='🌑'; }
+      else if (phase < 0.22) { namePhase='Waxing Crescent'; emoji='🌒'; }
+      else if (phase < 0.28){ namePhase='First Quarter'; emoji='🌓'; }
+      else if (phase < 0.47){ namePhase='Waxing Gibbous'; emoji='🌔'; }
+      else if (phase < 0.53){ namePhase='Full Moon'; emoji='🌕'; }
+      else if (phase < 0.72){ namePhase='Waning Gibbous'; emoji='🌖'; }
+      else if (phase < 0.78){ namePhase='Last Quarter'; emoji='🌗'; }
+      else { namePhase='Waning Crescent'; emoji='🌘'; }
 
-    return { namePhase, emoji, illum };
-  }
+      return { namePhase, emoji, illum };
+    }
 
-  function updateMoonPhase() {
-    const { namePhase, emoji, illum } = getMoonPhaseData();
-    document.getElementById('moonEmoji').textContent = emoji;
-    document.getElementById('phaseLabel').textContent = namePhase;
-    document.getElementById('illumination').textContent =
-      `Illumination: ${(illum*100).toFixed(1)}%`;
-  }
+    function updateMoonPhase() {
+      const { namePhase, emoji, illum } = getMoonPhaseData();
+      document.getElementById('moonEmoji').textContent = emoji;
+      document.getElementById('phaseLabel').textContent = namePhase;
+      document.getElementById('illumination').textContent =
+        `Illumination: ${(illum*100).toFixed(1)}%`;
+    }
 
-  function toDegrees(radians) {
-    return radians * 180 / Math.PI;
-  }
+    function toDegrees(radians) {
+      return radians * 180 / Math.PI;
+    }
+    function degreesToCompass(degrees) {
+      const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                          'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      const index = Math.round(degrees / 22.5) % 16;
+      return directions[index];
+    }
+    function formatDateTime(dateObj) {
+      if (!dateObj) return "No moonrise/moonset on this day";
+      const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+      const datePart = dateObj.toLocaleDateString('en-US', options);
+      const timePart = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return `${datePart} ${timePart}`;
+    }
 
-  function degreesToCompass(degrees) {
-    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-                        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    const index = Math.round(degrees / 22.5) % 16;
-    return directions[index];
-  }
+    async function fetchLocationAndWeather() {
+      try {
+        // ✅ Secure IP geolocation (HTTPS)
+        const locRes = await fetch('https://ipapi.co/json/');
+        const locData = await locRes.json();
 
-  function formatDateTime(dateObj) {
-    if (!dateObj) return "No moonrise/moonset on this day";
-    const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
-    const datePart = dateObj.toLocaleDateString('en-US', options);
-    const timePart = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    return `${datePart} ${timePart}`;
-  }
+        const lat = locData.latitude;
+        const lon = locData.longitude;
+        const city = locData.city || "";
+        const country = locData.country_name || "";
+        document.getElementById('location').textContent = city && country ? `${city}, ${country}` : "Location unknown";
 
-  async function fetchLocationAndWeather() {
-    try {
-      const locRes = await fetch('https://ipapi.co/json/');
-      const locData = await locRes.json();
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=precipitation_probability&daily=sunrise,sunset&timezone=auto`;
+        const weatherRes = await fetch(weatherUrl);
+        const weatherData = await weatherRes.json();
 
-      if(locData.status !== "success") {
-        document.getElementById('location').textContent = "Could not get location.";
-        document.getElementById('weather').textContent = "";
-        document.getElementById('sun').textContent = "";
-        clearMoonTimes();
-        return;
-      }
-
-      const lat = locData.lat;
-      const lon = locData.lon;
-      const city = locData.city || "";
-      const country = locData.country || "";
-      document.getElementById('location').textContent = city && country ? `${city}, ${country}` : "Location unknown";
-
-      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=precipitation_probability&daily=sunrise,sunset&timezone=auto`;
-      const weatherRes = await fetch(weatherUrl);
-      const weatherData = await weatherRes.json();
-
-      if(!weatherData.current_weather) {
-        document.getElementById('weather').textContent = "Weather data not available.";
-        clearMoonTimes();
-        return;
-      }
-
-      const temp = weatherData.current_weather.temperature.toFixed(1);
-
-      let rainChance = "N/A";
-      if (weatherData.hourly && weatherData.hourly.precipitation_probability && weatherData.hourly.time) {
-        const now = new Date();
-        const nowIso = now.toISOString().slice(0,13);
-        const hourIndex = weatherData.hourly.time.findIndex(t => t.startsWith(nowIso));
-        if (hourIndex !== -1) {
-          rainChance = weatherData.hourly.precipitation_probability[hourIndex] + "%";
+        if (!weatherData.current_weather) {
+          document.getElementById('weather').textContent = "Weather data not available.";
+          clearMoonTimes();
+          return;
         }
-      }
 
-      document.getElementById('weather').textContent = `🌡️current: ${temp} °C | ☂️chance: ${rainChance}`;
+        const temp = weatherData.current_weather.temperature.toFixed(1);
+        let rainChance = "N/A";
+        if (weatherData.hourly && weatherData.hourly.precipitation_probability && weatherData.hourly.time) {
+          const now = new Date();
+          const nowIso = now.toISOString().slice(0,13);
+          const hourIndex = weatherData.hourly.time.findIndex(t => t.startsWith(nowIso));
+          if (hourIndex !== -1) {
+            rainChance = weatherData.hourly.precipitation_probability[hourIndex] + "%";
+          }
+        }
 
-      if(weatherData.daily && weatherData.daily.sunrise && weatherData.daily.sunset) {
-        const sunrise = new Date(weatherData.daily.sunrise[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const sunset = new Date(weatherData.daily.sunset[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        document.getElementById('sun').textContent = `Sunrise: ${sunrise} | Sunset: ${sunset}`;
-      } else {
+        document.getElementById('weather').textContent = `🌡️current: ${temp} °C | ☂️chance: ${rainChance}`;
+
+        if (weatherData.daily.sunrise && weatherData.daily.sunset) {
+          const sunrise = new Date(weatherData.daily.sunrise[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          const sunset = new Date(weatherData.daily.sunset[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          document.getElementById('sun').textContent = `Sunrise: ${sunrise} | Sunset: ${sunset}`;
+        }
+
+        calculateAndDisplayMoonTimes(lat, lon);
+
+      } catch (e) {
+        document.getElementById('location').textContent = "Failed to get location.";
+        document.getElementById('weather').textContent = "Failed to fetch weather.";
         document.getElementById('sun').textContent = "";
+        clearMoonTimes();
+        console.error(e);
+      }
+    }
+
+    function clearMoonTimes() {
+      document.getElementById('moonrise').textContent = "";
+      document.getElementById('moonriseDirection').textContent = "";
+      document.getElementById('moonset').textContent = "";
+      document.getElementById('moonsetDirection').textContent = "";
+    }
+
+    function calculateAndDisplayMoonTimes(lat, lon) {
+      const today = new Date();
+      const moonToday = SunCalc.getMoonTimes(today, lat, lon);
+      let moonrise = moonToday.rise;
+      let moonset = moonToday.set;
+
+      if (!moonset || (moonrise && moonset < moonrise)) {
+        const nextDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+        moonset = SunCalc.getMoonTimes(nextDay, lat, lon).set;
       }
 
-      calculateAndDisplayMoonTimes(lat, lon);
+      let riseAz, riseCompass = '';
+      if (moonrise) {
+        const pos = SunCalc.getMoonPosition(moonrise, lat, lon);
+        riseAz = (toDegrees(pos.azimuth) + 180) % 360;
+        riseCompass = degreesToCompass(riseAz);
+      }
 
-    } catch(e) {
-      document.getElementById('location').textContent = "Failed to get location.";
-      document.getElementById('weather').textContent = "Failed to fetch weather data.";
-      document.getElementById('sun').textContent = "";
-      clearMoonTimes();
-      console.error(e);
-    }
-  }
+      let setAz, setCompass = '';
+      if (moonset) {
+        const pos = SunCalc.getMoonPosition(moonset, lat, lon);
+        setAz = (toDegrees(pos.azimuth) + 180) % 360;
+        setCompass = degreesToCompass(setAz);
+      }
 
-  function clearMoonTimes() {
-    document.getElementById('moonrise').textContent = "";
-    document.getElementById('moonriseDirection').textContent = "";
-    document.getElementById('moonset').textContent = "";
-    document.getElementById('moonsetDirection').textContent = "";
-  }
-
-  function calculateAndDisplayMoonTimes(lat, lon) {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const day = today.getDate();
-
-    const moonTimesToday = SunCalc.getMoonTimes(new Date(year, month, day), lat, lon);
-    let moonriseTime = moonTimesToday.rise;
-    let moonsetTime = moonTimesToday.set;
-
-    if (!moonsetTime || (moonriseTime && moonsetTime < moonriseTime)) {
-      const nextDay = new Date(year, month, day + 1);
-      const moonTimesNextDay = SunCalc.getMoonTimes(nextDay, lat, lon);
-      moonsetTime = moonTimesNextDay.set;
+      document.getElementById('moonrise').textContent = `Moonrise: ${formatDateTime(moonrise)}`;
+      document.getElementById('moonriseDirection').textContent = riseAz !== null ? `Moonrise direction: ${riseAz.toFixed(0)}° ${riseCompass}` : '';
+      document.getElementById('moonset').textContent = `Moonset: ${formatDateTime(moonset)}`;
+      document.getElementById('moonsetDirection').textContent = setAz !== null ? `Moonset direction: ${setAz.toFixed(0)}° ${setCompass}` : '';
     }
 
-    let moonriseAzimuthDeg = null;
-    let moonriseCompass = '';
-    if (moonriseTime) {
-      const pos = SunCalc.getMoonPosition(moonriseTime, lat, lon);
-      moonriseAzimuthDeg = (toDegrees(pos.azimuth) + 180) % 360;
-      moonriseCompass = degreesToCompass(moonriseAzimuthDeg);
-    }
+    updateDateTime();
+    updateMoonPhase();
+    fetchLocationAndWeather();
 
-    let moonsetAzimuthDeg = null;
-    let moonsetCompass = '';
-    if (moonsetTime) {
-      const pos = SunCalc.getMoonPosition(moonsetTime, lat, lon);
-      moonsetAzimuthDeg = (toDegrees(pos.azimuth) + 180) % 360;
-      moonsetCompass = degreesToCompass(moonsetAzimuthDeg);
-    }
-
-    document.getElementById('moonrise').textContent = `Moonrise: ${formatDateTime(moonriseTime)}`;
-    document.getElementById('moonriseDirection').textContent = moonriseAzimuthDeg !== null
-      ? `Moonrise direction: ${moonriseAzimuthDeg.toFixed(0)}° ${moonriseCompass}` : '';
-
-    document.getElementById('moonset').textContent = `Moonset: ${formatDateTime(moonsetTime)}`;
-    document.getElementById('moonsetDirection').textContent = moonsetAzimuthDeg !== null
-      ? `Moonset direction: ${moonsetAzimuthDeg.toFixed(0)}° ${moonsetCompass}` : '';
-  }
-
-  // Run
-  updateDateTime();
-  updateMoonPhase();
-  fetchLocationAndWeather();
-
-  setInterval(updateDateTime, 1000);
-  setInterval(updateMoonPhase, 60*60*1000);
-</script>
+    setInterval(updateDateTime, 1000);
+    setInterval(updateMoonPhase, 60 * 60 * 1000);
+  </script>
 </body>
 </html>
