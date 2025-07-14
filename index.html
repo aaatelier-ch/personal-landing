@@ -115,12 +115,14 @@
   function toDegrees(radians) {
     return radians * 180 / Math.PI;
   }
+
   function degreesToCompass(degrees) {
     const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                         'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
     const index = Math.round(degrees / 22.5) % 16;
     return directions[index];
   }
+
   function formatDateTime(dateObj) {
     if (!dateObj) return "No moonrise/moonset on this day";
     const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
@@ -131,61 +133,60 @@
 
   async function fetchLocationAndWeather() {
     try {
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
+      const locRes = await fetch('https://ipapi.co/json/');
+      const locData = await locRes.json();
 
-        // Reverse geocode for city/country
-        const reverseGeo = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-        const geoData = await reverseGeo.json();
-        const city = geoData.address.city || geoData.address.town || geoData.address.village || "";
-        const country = geoData.address.country || "";
-        document.getElementById('location').textContent = city && country ? `${city}, ${country}` : "Location detected";
-
-        // Weather + sunrise/sunset
-        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=precipitation_probability&daily=sunrise,sunset&timezone=auto`;
-        const weatherRes = await fetch(weatherUrl);
-        const weatherData = await weatherRes.json();
-
-        if (!weatherData.current_weather) {
-          document.getElementById('weather').textContent = "Weather data not available.";
-          clearMoonTimes();
-          return;
-        }
-
-        const temp = weatherData.current_weather.temperature.toFixed(1);
-
-        let rainChance = "N/A";
-        if (weatherData.hourly && weatherData.hourly.precipitation_probability && weatherData.hourly.time) {
-          const now = new Date();
-          const nowIso = now.toISOString().slice(0,13);
-          const hourIndex = weatherData.hourly.time.findIndex(t => t.startsWith(nowIso));
-          if (hourIndex !== -1) {
-            rainChance = weatherData.hourly.precipitation_probability[hourIndex] + "%";
-          }
-        }
-
-        document.getElementById('weather').textContent = `🌡️current: ${temp} °C | ☂️chance: ${rainChance}`;
-
-        if(weatherData.daily && weatherData.daily.sunrise && weatherData.daily.sunset) {
-          const sunrise = new Date(weatherData.daily.sunrise[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-          const sunset = new Date(weatherData.daily.sunset[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-          document.getElementById('sun').textContent = `Sunrise: ${sunrise} | Sunset: ${sunset}`;
-        } else {
-          document.getElementById('sun').textContent = "";
-        }
-
-        calculateAndDisplayMoonTimes(lat, lon);
-      }, (error) => {
-        document.getElementById('location').textContent = "Location access denied.";
-        document.getElementById('weather').textContent = "Unable to get weather.";
+      if(locData.status !== "success") {
+        document.getElementById('location').textContent = "Could not get location.";
+        document.getElementById('weather').textContent = "";
         document.getElementById('sun').textContent = "";
         clearMoonTimes();
-        console.error("Geolocation error:", error);
-      });
+        return;
+      }
+
+      const lat = locData.lat;
+      const lon = locData.lon;
+      const city = locData.city || "";
+      const country = locData.country || "";
+      document.getElementById('location').textContent = city && country ? `${city}, ${country}` : "Location unknown";
+
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=precipitation_probability&daily=sunrise,sunset&timezone=auto`;
+      const weatherRes = await fetch(weatherUrl);
+      const weatherData = await weatherRes.json();
+
+      if(!weatherData.current_weather) {
+        document.getElementById('weather').textContent = "Weather data not available.";
+        clearMoonTimes();
+        return;
+      }
+
+      const temp = weatherData.current_weather.temperature.toFixed(1);
+
+      let rainChance = "N/A";
+      if (weatherData.hourly && weatherData.hourly.precipitation_probability && weatherData.hourly.time) {
+        const now = new Date();
+        const nowIso = now.toISOString().slice(0,13);
+        const hourIndex = weatherData.hourly.time.findIndex(t => t.startsWith(nowIso));
+        if (hourIndex !== -1) {
+          rainChance = weatherData.hourly.precipitation_probability[hourIndex] + "%";
+        }
+      }
+
+      document.getElementById('weather').textContent = `🌡️current: ${temp} °C | ☂️chance: ${rainChance}`;
+
+      if(weatherData.daily && weatherData.daily.sunrise && weatherData.daily.sunset) {
+        const sunrise = new Date(weatherData.daily.sunrise[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const sunset = new Date(weatherData.daily.sunset[0]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        document.getElementById('sun').textContent = `Sunrise: ${sunrise} | Sunset: ${sunset}`;
+      } else {
+        document.getElementById('sun').textContent = "";
+      }
+
+      calculateAndDisplayMoonTimes(lat, lon);
+
     } catch(e) {
-      document.getElementById('location').textContent = "Error getting location.";
-      document.getElementById('weather').textContent = "Weather fetch failed.";
+      document.getElementById('location').textContent = "Failed to get location.";
+      document.getElementById('weather').textContent = "Failed to fetch weather data.";
       document.getElementById('sun').textContent = "";
       clearMoonTimes();
       console.error(e);
@@ -240,7 +241,7 @@
       ? `Moonset direction: ${moonsetAzimuthDeg.toFixed(0)}° ${moonsetCompass}` : '';
   }
 
-  // Initial load
+  // Run
   updateDateTime();
   updateMoonPhase();
   fetchLocationAndWeather();
